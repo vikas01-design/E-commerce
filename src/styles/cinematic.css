@@ -1,0 +1,647 @@
+/* ─── Cinematic Deep Crimson — Scoped Styles ─── */
+
+/* Page Wrapper */
+.cinematic-page {
+  background-color: var(--cin-obsidian);
+  color: var(--cin-pearl);
+  font-family: 'Montserrat', sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+.cinematic-page *,
+.cinematic-page *::before,
+.cinematic-page *::after {
+  box-sizing: border-box;
+}
+
+/* Cinzel utility */
+.font-cinzel {
+  font-family: 'Cinzel', serif;
+}
+
+/* ─── Navbar ─── */
+.cin-nav {
+  /* Base — overridden by inline scroll-aware styles in component */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 100;
+}
+
+/* Hide center links on mobile */
+@media (max-width: 768px) {
+  .cin-center-links {
+    display: none !important;
+  }
+  .cin-nav {
+    padding: 18px 24px !important;
+  }
+}
+
+.cin-logo {
+  font-family: 'Cinzel', serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--cin-pearl);
+  text-decoration: none;
+}
+
+.cin-nav-links {
+  display: flex;
+  gap: 48px;
+}
+
+.cin-nav-links a {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-weight: 400;
+  color: var(--cin-pearl);
+  text-decoration: none;
+  transition: color 0.3s;
+}
+
+.cin-nav-links a:hover {
+  color: var(--cin-crimson);
+}
+
+.cin-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  color: var(--cin-pearl);
+}
+
+.cin-nav-actions button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  position: relative;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.cin-cart-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--cin-crimson);
+  color: var(--cin-pearl);
+  font-size: 0.55rem;
+  font-weight: 700;
+  height: 16px;
+  min-width: 16px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+/* ─── Orbit Section — Mixed Circles + Tall Rects ─── */
+.oc-section {
+  position: relative;
+  background: var(--cin-obsidian);
+  padding: 140px 48px 160px;
+  overflow: hidden;
+}
+
+/* Shared parallax bg (used by oc-section) */
+.orbit-bg {
+  position: absolute;
+  inset: -10%;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(122,17,17,0.12) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(122,17,17,0.08) 0%, transparent 60%),
+    var(--cin-obsidian);
+  z-index: 0;
+}
+
+/* Thin vertical grid lines */
+.orbit-grid-lines {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  justify-content: space-evenly;
+  pointer-events: none;
+}
+.orbit-grid-line {
+  width: 1px;
+  height: 100%;
+  background: rgba(253,251,247,0.03);
+}
+
+/* Shared header */
+.orbit-header {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  margin-bottom: 96px;
+}
+.orbit-eyebrow {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.65rem;
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
+  color: var(--cin-crimson);
+  margin-bottom: 20px;
+  opacity: 0.9;
+}
+.orbit-title {
+  font-size: clamp(3rem, 6vw, 5.5rem);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 0.92;
+  color: var(--cin-pearl);
+  margin-bottom: 32px;
+}
+.orbit-title em {
+  font-style: italic;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(253,251,247,0.5);
+}
+.orbit-title-line {
+  width: 80px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--cin-crimson), transparent);
+  margin: 0 auto;
+  transform-origin: center;
+}
+
+/* Shared bottom CTA */
+.orbit-bottom-cta {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  margin-top: 96px;
+}
+.orbit-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--cin-pearl);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(253,251,247,0.2);
+  padding-bottom: 8px;
+  transition: border-color 0.3s, color 0.3s;
+}
+.orbit-cta-btn:hover {
+  border-color: var(--cin-crimson);
+  color: var(--cin-crimson);
+}
+
+/* ── Shared sub/name/shop text ── */
+.oc-sub {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.58rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--accent, var(--cin-crimson));
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.oc-name {
+  font-family: 'Cinzel', serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cin-pearl);
+  line-height: 1.1;
+  margin-bottom: 10px;
+}
+.oc-shop {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  color: var(--cin-pearl);
+  opacity: 0;
+  display: inline-block;
+  transform: translateX(-6px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* ── Mixed layout row ── */
+.oc-layout {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  max-width: 1300px;
+  margin: 0 auto;
+  /* circles sit at mid-height, rects are taller — flex align-items center balances them */
+}
+
+/* ════════════════════════════════
+   CIRCLE CARDS
+   ════════════════════════════════ */
+.oc-circle-wrapper {
+  will-change: transform;
+  flex-shrink: 0;
+}
+
+.oc-circle {
+  display: block;
+  text-decoration: none;
+  position: relative;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1.5px solid rgba(253,251,247,0.12);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.oc-circle:hover {
+  border-color: var(--accent, var(--cin-crimson));
+  box-shadow: 0 0 48px 8px rgba(122,17,17,0.35);
+}
+
+/* Image */
+.oc-circle-img {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.oc-circle-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  filter: grayscale(20%) brightness(0.7);
+  transition: transform 0.9s cubic-bezier(0.22,1,0.36,1), filter 0.6s ease;
+  display: block;
+}
+.oc-circle:hover .oc-circle-img img {
+  transform: scale(1.1);
+  filter: grayscale(0%) brightness(0.85);
+}
+.oc-circle-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 60%, rgba(10,10,10,0.75) 0%, rgba(10,10,10,0.2) 100%);
+  border-radius: 50%;
+}
+
+/* Spinning dashed ring */
+.oc-circle-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px dashed rgba(253,251,247,0.15);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  animation: ring-spin 12s linear infinite;
+}
+.oc-circle:hover .oc-circle-ring {
+  opacity: 1;
+}
+@keyframes ring-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Label centred inside circle */
+.oc-circle-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 28px;
+  z-index: 2;
+  transform: translateY(10px);
+  transition: transform 0.4s ease;
+}
+.oc-circle:hover .oc-circle-label {
+  transform: translateY(0);
+}
+.oc-circle .oc-name {
+  font-size: clamp(1rem, 2vw, 1.25rem);
+}
+.oc-circle:hover .oc-shop {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ════════════════════════════════
+   TALL RECTANGLE CARDS
+   ════════════════════════════════ */
+.oc-rect-wrapper {
+  will-change: transform;
+  flex-shrink: 0;
+}
+
+.oc-rect {
+  display: block;
+  text-decoration: none;
+  position: relative;
+  width: 260px;
+  height: 480px;
+  border-radius: 160px;          /* pill / stadium shape */
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid rgba(253,251,247,0.08);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.oc-rect:hover {
+  border-color: var(--accent, var(--cin-crimson));
+  box-shadow: 0 0 56px 10px rgba(122,17,17,0.3);
+}
+
+/* Image */
+.oc-rect-img {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.oc-rect-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  filter: grayscale(25%) brightness(0.7);
+  transition: transform 0.9s cubic-bezier(0.22,1,0.36,1), filter 0.7s ease;
+  display: block;
+}
+.oc-rect:hover .oc-rect-img img {
+  transform: scale(1.08);
+  filter: grayscale(0%) brightness(0.85);
+}
+
+/* Gradient from bottom */
+.oc-rect-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(10,10,10,0.95) 0%,
+    rgba(10,10,10,0.35) 45%,
+    transparent 100%
+  );
+}
+
+/* Colour glow */
+.oc-rect-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 90%, var(--accent, #7A1111) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.oc-rect:hover .oc-rect-glow {
+  opacity: 0.3;
+}
+
+/* Large index watermark top-right */
+.oc-rect-num {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  font-family: 'Cinzel', serif;
+  font-size: 3.5rem;
+  line-height: 1;
+  color: rgba(253,251,247,0.05);
+  font-weight: 700;
+  pointer-events: none;
+  transition: color 0.4s;
+  z-index: 2;
+}
+.oc-rect:hover .oc-rect-num {
+  color: rgba(122,17,17,0.2);
+}
+
+/* Bottom info */
+.oc-rect-info {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 28px 24px 28px;
+  z-index: 3;
+  text-align: center;
+}
+.oc-rect .oc-name {
+  font-size: clamp(1rem, 1.8vw, 1.25rem);
+}
+.oc-rect-line {
+  width: 28px;
+  height: 1px;
+  background: var(--accent, var(--cin-crimson));
+  margin: 10px auto 10px;
+  transition: width 0.4s ease;
+}
+.oc-rect:hover .oc-rect-line {
+  width: 52px;
+}
+.oc-rect:hover .oc-shop {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+/* ── Stagger heights — circle cards sit at mid-row, rects are taller ── */
+.oc-layout .oc-circle-wrapper:first-child  { margin-top: 80px; }
+.oc-layout .oc-circle-wrapper:last-child   { margin-top: 60px; }
+
+/* ─── Responsive ─── */
+@media (max-width: 1100px) {
+  .oc-layout {
+    flex-wrap: wrap;
+    gap: 28px;
+  }
+  .oc-layout .oc-circle-wrapper:first-child,
+  .oc-layout .oc-circle-wrapper:last-child {
+    margin-top: 0;
+  }
+  .oc-circle { width: 260px; height: 260px; }
+  .oc-rect   { width: 220px; height: 380px; }
+}
+
+@media (max-width: 640px) {
+  .oc-section { padding: 100px 20px 100px; }
+  .oc-layout  { gap: 18px; }
+  .oc-circle  { width: 160px; height: 160px; }
+  .oc-rect    { width: 150px; height: 280px; border-radius: 80px; }
+  .oc-rect-num { font-size: 2.5rem; }
+}
+
+/* ─── Museum Pedestal (Trending) ─── */
+.pedestal {
+  background: linear-gradient(to top, rgba(122, 17, 17, 0.2), transparent);
+  border-bottom: 2px solid var(--cin-crimson);
+  padding: 32px;
+  margin-bottom: 24px;
+  transition: background 0.5s ease;
+}
+
+.pedestal-group:hover .pedestal {
+  background: linear-gradient(to top, rgba(122, 17, 17, 0.15), transparent);
+}
+
+.pedestal img {
+  width: 100%;
+  height: 480px;
+  object-fit: cover;
+  filter: grayscale(100%);
+  transition: filter 0.7s ease, box-shadow 0.7s ease;
+}
+
+.pedestal-group:hover .pedestal img {
+  filter: grayscale(0%);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Rising Demand (Fast Selling) ─── */
+.rising-demand {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: var(--cin-crimson);
+  opacity: 0.3;
+  transition: height 1.2s ease-in-out;
+  pointer-events: none;
+}
+
+/* ─── Cinematic Scrollbar ─── */
+.cinematic-page::-webkit-scrollbar {
+  width: 5px;
+}
+.cinematic-page::-webkit-scrollbar-track {
+  background: var(--cin-obsidian);
+}
+.cinematic-page::-webkit-scrollbar-thumb {
+  background: var(--cin-crimson);
+  border-radius: 10px;
+}
+
+/* ─── New Arrivals Poster Cards ─── */
+.poster-card {
+  cursor: pointer;
+}
+
+.poster-card-inner {
+  position: relative;
+  height: 700px;
+  overflow: hidden;
+  border: 1px solid rgba(253, 251, 247, 0.1);
+  margin-bottom: 32px;
+}
+
+.poster-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: all 1s ease;
+  filter: grayscale(100%) brightness(0.5);
+}
+
+.poster-card:hover img {
+  transform: scale(1.1);
+  filter: grayscale(0%) brightness(1);
+}
+
+.poster-card-number {
+  font-family: 'Cinzel', serif;
+  font-size: 3.5rem;
+  line-height: 1;
+  opacity: 0.2;
+  transition: opacity 0.4s;
+}
+
+.poster-card:hover .poster-card-number {
+  opacity: 1;
+}
+
+.poster-card-title {
+  font-family: 'Cinzel', serif;
+  font-size: 2.5rem;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-top: -8px;
+  transition: color 0.4s;
+}
+
+.poster-card:hover .poster-card-title {
+  color: var(--cin-crimson);
+}
+
+.poster-card-btn {
+  font-family: 'Cinzel', serif;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.8rem;
+  border: 1px solid var(--cin-pearl);
+  padding: 12px 32px;
+  background: transparent;
+  color: var(--cin-pearl);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.poster-card:hover .poster-card-btn {
+  background: var(--cin-pearl);
+  color: var(--cin-obsidian);
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 1024px) {
+  .orbit-container {
+    gap: 16px;
+  }
+  .arch-item:nth-child(1),
+  .arch-item:nth-child(3) {
+    width: 180px;
+    height: 180px;
+  }
+  .arch-item:nth-child(2) {
+    width: 210px;
+    height: 210px;
+  }
+}
+
+@media (max-width: 768px) {
+  .cin-nav {
+    padding: 20px 24px;
+  }
+  .cin-nav-links {
+    display: none;
+  }
+  .orbit-container {
+    overflow-x: auto;
+    justify-content: flex-start;
+    height: auto;
+    padding: 16px;
+    gap: 12px;
+  }
+  .arch-item:nth-child(n) {
+    transform: none;
+    width: 140px;
+    height: 140px;
+  }
+  .pedestal img {
+    height: 320px;
+  }
+  .poster-card-inner {
+    height: 420px;
+  }
+}
