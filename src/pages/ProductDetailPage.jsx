@@ -1,10 +1,11 @@
 import { useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { Star, Heart, ShoppingBag, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Truck, RefreshCw, Lock, Check, Share2 } from "lucide-react";
+import { Star, Heart, ShoppingBag, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Truck, RefreshCw, Lock, Check } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { products } from "../data/products";
 import { useCart } from "../context/CartContext";
+import { useWishlist } from "../context/WishlistContext";
 
 /* ─── Static reviews per product ─── */
 const REVIEWS = {
@@ -74,8 +75,9 @@ export default function ProductDetailPage() {
 function ProductDetail({ product }) {
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { toggleWishlist, isWishlisted } = useWishlist();
+  const wishlisted = isWishlisted(product.id);
 
-  // Multiple gallery images — use the same image shown in different crops for demo
   const galleryImages = [product.image, product.image, product.image, product.image];
 
   const [activeImg, setActiveImg] = useState(0);
@@ -83,7 +85,6 @@ function ProductDetail({ product }) {
   const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
   const [selectedSize, setSelectedSize] = useState(null);
   const [quantity, setQuantity] = useState(1);
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [added, setAdded] = useState(false);
   const [sizeError, setSizeError] = useState(false);
   const imgRef = useRef(null);
@@ -334,11 +335,11 @@ function ProductDetail({ product }) {
 
                 {/* Wishlist */}
                 <button
-                  onClick={() => setIsWishlisted((v) => !v)}
+                  onClick={() => toggleWishlist(product)}
                   className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 hover:border-[#d63384] transition-colors focus:outline-none focus:ring-2 focus:ring-[#CBC0D3]"
                   aria-label="Add to wishlist"
                 >
-                  <Heart size={18} fill={isWishlisted ? "#d63384" : "none"} stroke={isWishlisted ? "#d63384" : "#6b7280"} />
+                  <Heart size={18} fill={wishlisted ? "#d63384" : "none"} stroke={wishlisted ? "#d63384" : "#6b7280"} />
                 </button>
               </div>
 

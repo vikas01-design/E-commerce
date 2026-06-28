@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Outfit:wght@300;400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Outfit:wght@300;400;600;700&family=Italiana&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
 @import "tailwindcss";
 
 /* ─── Tailwind Theme ─── */
@@ -20,9 +20,12 @@
   --color-ink-black: #111111;
   --font-syne: 'Syne', sans-serif;
   --font-outfit: 'Outfit', sans-serif;
+  --font-anola: 'Anola', 'Italiana', 'Playfair Display', serif;
+  --font-heqra: 'Heqra', 'Playfair Display', 'Italiana', serif;
 
   --animate-float: float 10s ease-in-out infinite;
   --animate-marquee-slow: marquee-slow 25s linear infinite;
+  --animate-truck-drive: truck-drive 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 
   @keyframes float {
     0%, 100% { transform: translateY(0) translateX(0); }
@@ -33,6 +36,13 @@
   @keyframes marquee-slow {
     0%   { transform: translateX(0); }
     100% { transform: translateX(-33.333%); }
+  }
+
+  @keyframes truck-drive {
+    0% { transform: translateX(0); opacity: 1; }
+    35% { transform: translateX(45px); opacity: 0; }
+    36% { transform: translateX(-45px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
   }
 }
 
@@ -303,4 +313,22 @@
   display: flex;
   animation: marquee-slow 25s linear infinite;
   white-space: nowrap;
+}
+
+@font-face {
+  font-family: 'Anola';
+  src: url('/Anola.ttf') format('truetype'),
+       url('/Anola.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Heqra';
+  src: url('/Heqra.ttf') format('truetype'),
+       url('/Heqra.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
 }

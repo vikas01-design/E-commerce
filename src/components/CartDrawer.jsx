@@ -1,12 +1,20 @@
 import { X, Minus, Plus, ShoppingBag, Trash2, ArrowRight } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
+import { useAuth, useClerk } from '@clerk/react';
 
 export default function CartDrawer() {
   const { cartItems, cartTotal, cartCount, isCartOpen, setIsCartOpen, removeFromCart, updateQuantity } = useCart();
   const navigate = useNavigate();
+  const { isSignedIn } = useAuth();
+  const { openSignIn } = useClerk();
 
   const handleCheckout = () => {
+    if (!isSignedIn) {
+      alert("First you have to login");
+      openSignIn();
+      return;
+    }
     setIsCartOpen(false);
     navigate('/checkout');
   };
@@ -16,14 +24,14 @@ export default function CartDrawer() {
       {/* Backdrop */}
       {isCartOpen && (
         <div
-          className="fixed inset-0 z-[150] bg-black/40 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-[1100] bg-black/40 backdrop-blur-sm transition-opacity"
           onClick={() => setIsCartOpen(false)}
         />
       )}
 
       {/* Drawer */}
       <aside
-        className={`fixed top-0 right-0 z-[200] h-full w-full max-w-[420px] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 z-[1200] h-full w-full max-w-[420px] bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out ${
           isCartOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >

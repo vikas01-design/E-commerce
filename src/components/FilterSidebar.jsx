@@ -44,9 +44,9 @@ export default function FilterSidebar({
   onClearAll,
 }) {
   const categories = [
-    { name: "Women's Wear", key: "WOMEN'S WEAR", count: 8 },
+    { name: "Women's Wear", key: "WOMEN'S WEAR", count: 30 },
     { name: "Ethnic Wear",  key: "ETHNIC WEAR",  count: 7 },
-    { name: "Kids Wear",    key: "KIDS WEAR",    count: 16 },
+    { name: "Kids Wear",    key: "KIDS WEAR",    count: 36 },
   ];
 
   const sizes = ["XS", "S", "M", "L", "XL", "XXL"];

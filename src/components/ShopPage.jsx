@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { ChevronDown, Filter, ChevronLeft, ChevronRight, Truck, RefreshCw, Lock, Star, Tag, Ticket, CreditCard, Gift, Clock, Sparkles } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "motion/react";
 import FilterSidebar from "./FilterSidebar";
 import ProductCard from "./ProductCard";
 import Navbar from "./Navbar";
@@ -8,31 +9,142 @@ import Footer from "./Footer";
 import { products } from "../data/products";
 
 export default function ShopPage() {
-  const [searchParams] = useSearchParams();
-  const urlCategory = searchParams.get('category') || 'All';
-  const urlQuery = searchParams.get('q') || '';
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+
+  const bannerSlides = useMemo(() => [
+    { image: "/pexels-officialsourovsarker-34313230.jpg", name: "Yellow Chikankari Lehenga", category: "Ethnic Wear" },
+    { image: "/pexels-arifsyd15-5197213.jpg", name: "Black Casual Shirt", category: "Women's Wear" },
+    { image: "/pexels-gustavo-fring-8770947.jpg", name: "Yellow Lehenga Special", category: "Ethnic Wear" },
+    { image: "/pexels-1054048-5721527.jpg", name: "Pink Floral Lehenga", category: "Women's Wear" },
+    { image: "/pexels-dhanno-25184935.jpg", name: "Purple Floral Kurta", category: "Ethnic Wear" },
+  ], []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveSlideIndex(prev => (prev + 1) % bannerSlides.length);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [bannerSlides]);
 
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
-  const navigate = useNavigate();
-  const [activeCategory, setActiveCategory] = useState(urlCategory);
-  const [searchQuery, setSearchQuery] = useState(urlQuery);
-  const [sortBy, setSortBy] = useState("Relevance");
-  const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState(() => {
+    try {
+      return sessionStorage.getItem("shop_sortBy") || "Relevance";
+    } catch {
+      return "Relevance";
+    }
+  });
+  const [currentPage, setCurrentPage] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("shop_page");
+      return saved ? Number(saved) : 1;
+    } catch {
+      return 1;
+    }
+  });
   const itemsPerPage = 8;
 
-  // Sidebar filter state
-  const [sidebarCategories, setSidebarCategories] = useState([]);
-  const [priceMax, setPriceMax] = useState(10000);
-  const [selectedSizes, setSelectedSizes] = useState([]);
-  const [selectedColors, setSelectedColors] = useState([]);
-  const [selectedAvailability, setSelectedAvailability] = useState("all");
+  // Sidebar filter state — never reset by URL changes
+  const [sidebarCategories, setSidebarCategories] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("shop_categories");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [priceMax, setPriceMax] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("shop_priceMax");
+      return saved ? Number(saved) : 10000;
+    } catch {
+      return 10000;
+    }
+  });
+  const [selectedSizes, setSelectedSizes] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("shop_sizes");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selectedColors, setSelectedColors] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem("shop_colors");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selectedAvailability, setSelectedAvailability] = useState(() => {
+    try {
+      return sessionStorage.getItem("shop_availability") || "all";
+    } catch {
+      return "all";
+    }
+  });
 
-  // Sync URL params when they change
+  // Sync state to sessionStorage
   useEffect(() => {
-    setActiveCategory(searchParams.get('category') || 'All');
-    setSearchQuery(searchParams.get('q') || '');
-    setCurrentPage(1);
-  }, [searchParams]);
+    sessionStorage.setItem("shop_sortBy", sortBy);
+  }, [sortBy]);
+
+  useEffect(() => {
+    sessionStorage.setItem("shop_page", currentPage.toString());
+  }, [currentPage]);
+
+  useEffect(() => {
+    sessionStorage.setItem("shop_categories", JSON.stringify(sidebarCategories));
+  }, [sidebarCategories]);
+
+  useEffect(() => {
+    sessionStorage.setItem("shop_priceMax", priceMax.toString());
+  }, [priceMax]);
+
+  useEffect(() => {
+    sessionStorage.setItem("shop_sizes", JSON.stringify(selectedSizes));
+  }, [selectedSizes]);
+
+  useEffect(() => {
+    sessionStorage.setItem("shop_colors", JSON.stringify(selectedColors));
+  }, [selectedColors]);
+
+  useEffect(() => {
+    sessionStorage.setItem("shop_availability", selectedAvailability);
+  }, [selectedAvailability]);
+
+  // Scroll Position Restoration
+  useEffect(() => {
+    const handleScroll = () => {
+      sessionStorage.setItem("shop_scroll", window.scrollY.toString());
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const savedScroll = sessionStorage.getItem("shop_scroll");
+      if (savedScroll) {
+        const timer = setTimeout(() => {
+          window.scrollTo(0, Number(savedScroll));
+        }, 150); // slight delay to allow items to render
+        return () => clearTimeout(timer);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  // Read URL params directly — no state sync, no useEffect reset
+  const activeCategory = searchParams.get('category') || 'All';
+  const searchQuery    = searchParams.get('q') || '';
 
   const handleCategoryToggle = (key) => {
     setSidebarCategories(prev =>
@@ -76,8 +188,8 @@ export default function ShopPage() {
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       list = list.filter(p =>
-        p.name.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q)
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.category && p.category.toLowerCase().includes(q))
       );
     }
 
@@ -137,10 +249,33 @@ export default function ShopPage() {
       case "Best Selling":
         list.sort((a, b) => (b.reviews || 0) - (a.reviews || 0));
         break;
-      default:
-        break;
     }
-    return list;
+
+    // Partition: Unique photoshoot series first, duplicate series last
+    const uniqueImageProducts = [];
+    const duplicateImageProducts = [];
+    const seenSeries = new Set();
+
+    list.forEach(p => {
+      if (p.image) {
+        // Extract prefix up to the last hyphen '-' to identify same photoshoot/model series
+        const lastHyphenIndex = p.image.lastIndexOf('-');
+        const seriesKey = lastHyphenIndex !== -1 
+          ? p.image.substring(0, lastHyphenIndex) 
+          : p.image;
+
+        if (seenSeries.has(seriesKey)) {
+          duplicateImageProducts.push(p);
+        } else {
+          seenSeries.add(seriesKey);
+          uniqueImageProducts.push(p);
+        }
+      } else {
+        uniqueImageProducts.push(p);
+      }
+    });
+
+    return [...uniqueImageProducts, ...duplicateImageProducts];
   }, [activeCategory, sortBy, searchQuery, sidebarCategories, priceMax, selectedSizes, selectedColors, selectedAvailability]);
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
@@ -150,8 +285,16 @@ export default function ShopPage() {
   );
 
   const handleCategoryChange = (cat) => {
-    setActiveCategory(cat);
-    setSearchQuery('');
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (cat === "All") {
+        next.delete("category");
+      } else {
+        next.set("category", cat);
+      }
+      next.delete("q");
+      return next;
+    });
     setCurrentPage(1);
   };
 
@@ -159,21 +302,61 @@ export default function ShopPage() {
     <div className="min-h-screen bg-[#FAFAFA] font-sans">
       <Navbar />
 
-      <div className="pb-24 lg:pb-0 pt-28 md:pt-32">
+      <div className="pb-24 lg:pb-0">
         {/* 2. SHOP HEADER */}
-        <div className="border-b border-[#CBC0D3] pt-4 pb-0 text-center">
-          <h1 className="font-serif text-[28px] md:text-[34px] font-semibold text-gray-900">Our Collection</h1>
-          <p className="m-5 text-[14px] md:text-[15px] font-light text-[#8E9AAF] px-4">
-            {searchQuery ? (
-              <>Results for <strong className="text-gray-700">&quot;{searchQuery}&quot;</strong></>
-            ) : (
-              'Discover timeless fashion pieces curated for modern elegance.'
-            )}
-          </p>
+        <div className="border-b border-white/10 pt-36 md:pt-44 pb-0 text-center relative overflow-hidden bg-black text-white">
+          
+          {/* Background Video */}
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover z-0 opacity-45 pointer-events-none"
+          >
+            <source src="/header-bg-video.mp4" type="video/mp4" />
+          </video>
+
+          {/* Luxury Overlay Gradient */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/30 to-black/85 z-0 pointer-events-none" />
+
+          {/* Background Grid Elements */}
+          <div className="absolute left-[20%] top-0 bottom-0 w-px bg-white/10 hidden lg:block z-0" />
+          <div className="absolute right-[20%] top-0 bottom-0 w-px bg-white/10 hidden lg:block z-0" />
+          
+          {/* Left Minimalist Panel */}
+          <div className="absolute left-8 top-1/2 -translate-y-1/2 hidden lg:flex flex-col items-start gap-1 text-left z-10 pointer-events-none select-none font-outfit text-white/50 uppercase">
+            <span className="text-[10px] tracking-[0.25em] font-semibold text-rust">PG // 01</span>
+            <span className="text-[10px] tracking-[0.25em] text-white/40">Shop Catalog</span>
+          </div>
+
+          {/* Right Minimalist Panel */}
+          <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden lg:flex flex-col items-end gap-1 text-right z-10 pointer-events-none select-none font-outfit text-white/50 uppercase">
+            <span className="text-[10px] tracking-[0.25em] font-semibold text-rust">SS // 25</span>
+            <span className="text-[10px] tracking-[0.25em] text-white/40">Authentic Wear</span>
+          </div>
+
+          {/* Abstract Delicate Circular Lines (Instead of Cards/Images) */}
+          <div className="absolute left-[10%] top-1/2 -translate-y-1/2 w-16 h-16 rounded-full border border-white/10 hidden lg:block z-0 animate-pulse" />
+          <div className="absolute right-[10%] top-1/2 -translate-y-1/2 w-16 h-16 rounded-full border border-white/10 hidden lg:block z-0 animate-pulse" />
+
+          {/* Main Header Content */}
+          <div className="relative z-10 py-1 mb-8">
+            <h1 className="font-anola text-[36px] md:text-[46px] text-white tracking-tight leading-none drop-shadow-md">
+              Our <span className="italic text-rust font-light font-serif">Collection</span>
+            </h1>
+            <p className="mt-4 mb-2 text-[14px] md:text-[15px] font-light text-white/80 px-4 max-w-xl mx-auto drop-shadow-sm">
+              {searchQuery ? (
+                <>Results for <strong className="text-white">&quot;{searchQuery}&quot;</strong></>
+              ) : (
+                'Discover timeless fashion pieces curated for modern elegance.'
+              )}
+            </p>
+          </div>
           
 
           {/* ── Announcement Ticker ── */}
-          <div className="mt-0 relative overflow-hidden bg-[#1a1a1a]" style={{ height: '48px' }}>
+          <div className="mt-0 relative overflow-hidden bg-[#1a1a1a] z-10" style={{ height: '48px' }}>
 
             {/* LEFT "LIMITED TIME" badge */}
             <div style={{
@@ -193,6 +376,7 @@ export default function ShopPage() {
                 textTransform: 'uppercase',
                 color: '#fff',
                 whiteSpace: 'nowrap',
+                lineHeight: '1',
               }}>
                 Limited Time
               </span>
@@ -378,24 +562,7 @@ export default function ShopPage() {
                 </div>
               )}
 
-              {/* Promo Banner */}
-              <div className="my-16 overflow-hidden rounded-2xl bg-gradient-to-r from-[#EFD3D7] to-[#CBC0D3]">
-                <div className="flex flex-col md:flex-row items-center justify-between px-8 md:px-16 py-12 md:py-20 relative">
-                  <div className="relative z-10 max-w-md text-center md:text-left">
-                    <span className="text-sm font-bold tracking-widest text-gray-700 uppercase">Limited Time Offer</span>
-                    <h2 className="mt-4 font-serif text-[32px] font-bold text-gray-900 md:text-[40px] leading-tight">Summer Fashion Sale</h2>
-                    <p className="mt-2 text-lg text-gray-800">Up to 40% OFF on selected collections</p>
-                    <button className="mt-8 rounded bg-[#8E9AAF] px-8 py-3 font-medium text-white transition-colors hover:bg-gray-700">
-                      Shop the Sale &rarr;
-                    </button>
-                  </div>
-                  <div className="absolute right-0 top-0 h-full w-1/2 opacity-20 pointer-events-none hidden md:block">
-                    <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" className="h-full w-full object-cover transform translate-x-1/4 scale-150">
-                      <path fill="#ffffff" d="M47.7,-57.2C59.5,-47.3,65.3,-29.4,66.8,-11.9C68.3,5.5,65.5,22.6,56.1,36.5C46.7,50.3,30.8,61,12.5,65.2C-5.8,69.5,-26.4,67.3,-41.7,56.7C-56.9,46.2,-66.7,27.3,-68.8,7.9C-70.9,-11.5,-65.2,-31.4,-52.3,-41.8C-39.3,-52.1,-19.7,-52.8,-0.7,-51.9C18.2,-51.1,36,-48.6,47.7,-57.2Z" transform="translate(100 100)" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
+
 
               {/* Pagination */}
               {totalPages > 1 && (
@@ -436,6 +603,85 @@ export default function ShopPage() {
 
             </div>
           </div>
+
+          {/* Promo Banner (Redesigned Ultra-Premium Style) */}
+          <div className="my-16 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#121212] via-[#222222] to-[#121212] shadow-2xl relative">
+            {/* Background glowing elements */}
+            <div className="absolute right-0 top-0 h-full w-full opacity-30 pointer-events-none z-0">
+              <div className="absolute right-12 top-1/2 -translate-y-1/2 w-[350px] h-[350px] rounded-full bg-[#C87A5D]/25 blur-[120px] animate-pulse" />
+              <div className="absolute left-1/4 top-0 w-[200px] h-[200px] rounded-full bg-purple-500/10 blur-[80px]" />
+            </div>
+
+            {/* Rotating accent circle pattern */}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+              className="absolute right-24 top-1/2 -translate-y-1/2 w-80 h-80 rounded-full border border-dashed border-[#C87A5D]/20 hidden lg:block z-0 pointer-events-none"
+            />
+
+            <div className="flex flex-col md:flex-row items-center justify-between px-8 md:px-16 py-12 md:py-16 relative z-10">
+              
+              {/* Left content */}
+              <div className="max-w-md text-center md:text-left flex flex-col items-center md:items-start">
+                {/* Pulsing Badge */}
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#C87A5D]/30 bg-[#C87A5D]/10 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.25em] text-[#C87A5D]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#C87A5D] animate-ping" />
+                  Limited Time Offer
+                </div>
+
+                <h2 className="mt-6 font-heqra text-[38px] md:text-[50px] leading-tight text-white font-normal tracking-wide">
+                  Summer <span className="italic text-[#C87A5D] font-light">Fashion Sale</span>
+                </h2>
+                
+                <p className="mt-3 text-sm md:text-base text-white/70 font-outfit font-light tracking-wide max-w-sm">
+                  Elevate your seasonal wardrobe with up to <span className="font-semibold text-white">40% OFF</span> our signature hand-curated edit.
+                </p>
+
+                <button 
+                  onClick={() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="group relative overflow-hidden rounded-full border border-[#C87A5D] bg-transparent mt-8 px-8 py-3.5 text-[11px] font-bold uppercase tracking-[0.2em] text-white transition-all duration-300 hover:border-white cursor-pointer"
+                >
+                  <span className="absolute inset-0 bg-[#C87A5D] scale-x-0 group-hover:scale-x-100 transition-transform duration-500 ease-out origin-left z-0" />
+                  <span className="relative z-10 flex items-center gap-2">
+                    Shop the Sale
+                    <span className="transition-transform duration-300 group-hover:translate-x-1.5">→</span>
+                  </span>
+                </button>
+              </div>
+
+              {/* Right side floating image collage */}
+              <div className="mt-12 md:mt-0 relative z-10 flex items-center justify-center">
+                <div className="relative hidden md:block overflow-hidden rounded-2xl border border-white/10 shadow-2xl rotate-3 transition-all duration-500 w-52 h-64 bg-gray-900 group">
+                  <AnimatePresence>
+                    <motion.div
+                      key={activeSlideIndex}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.4 }}
+                      className="absolute inset-0 w-full h-full"
+                    >
+                      <img
+                        src={bannerSlides[activeSlideIndex].image}
+                        className="w-full h-full object-cover object-top grayscale group-hover:grayscale-0 transition-all duration-700"
+                        alt={bannerSlides[activeSlideIndex].name}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4">
+                        <span className="font-heqra text-white text-xs tracking-wider">{bannerSlides[activeSlideIndex].name}</span>
+                        <span className="font-outfit text-white/50 text-[10px] uppercase tracking-widest mt-0.5">{bannerSlides[activeSlideIndex].category}</span>
+                      </div>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+
+                {/* Secondary decorative elements */}
+                <div className="absolute -bottom-4 -left-4 w-12 h-12 rounded-full border border-[#C87A5D]/40 bg-transparent hidden lg:block animate-bounce" style={{ animationDuration: '4s' }} />
+              </div>
+
+            </div>
+          </div>
         </div>
 
         {/* Recently Viewed */}
@@ -472,20 +718,46 @@ export default function ShopPage() {
           </div>
         </div>
 
-        {/* Trust Badges */}
-        <div className="border-t border-gray-100 bg-[#FAFAFA] py-16">
+        {/* Trust Badges (Redesigned Editorial Style) */}
+        <div className="border-t border-gray-100 bg-gradient-to-b from-[#FAFAFA] to-white py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+            <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
               {[
-                { icon: Truck, title: "Free Shipping", sub: "On orders above ₹999" },
-                { icon: RefreshCw, title: "Easy Returns", sub: "7-day hassle-free returns" },
-                { icon: Lock, title: "Secure Payments", sub: "100% safe & encrypted" },
-                { icon: Star, title: "Quality Assured", sub: "Curated premium fabrics" }
+                { 
+                  icon: Truck, 
+                  title: "Free Shipping", 
+                  sub: "On orders above ₹999", 
+                  bgClass: "bg-[#EFD3D7]/20 border-[#EFD3D7]/30 text-[#C87A5D]",
+                  hoverClass: "group-hover:animate-truck-drive" 
+                },
+                { 
+                  icon: RefreshCw, 
+                  title: "Easy Returns", 
+                  sub: "7-day hassle-free returns", 
+                  bgClass: "bg-[#CBC0D3]/20 border-[#CBC0D3]/30 text-indigo-700",
+                  hoverClass: "group-hover:rotate-[360deg]" 
+                },
+                { 
+                  icon: Lock, 
+                  title: "Secure Payments", 
+                  sub: "100% safe & encrypted", 
+                  bgClass: "bg-[#DEE2FF]/20 border-[#DEE2FF]/30 text-sky-700",
+                  hoverClass: "group-hover:scale-110 group-hover:-translate-y-1 group-hover:rotate-6" 
+                },
+                { 
+                  icon: Star, 
+                  title: "Quality Assured", 
+                  sub: "Curated premium fabrics", 
+                  bgClass: "bg-[#FEEAFA]/30 border-[#FEEAFA]/40 text-pink-700",
+                  hoverClass: "group-hover:rotate-[144deg] group-hover:scale-110 group-hover:text-pink-600" 
+                }
               ].map((badge, idx) => (
-                <div key={idx} className="flex flex-col items-center text-center rounded-xl bg-white p-6 shadow-sm">
-                  <badge.icon size={36} className="mb-4 text-[#8E9AAF]" strokeWidth={1.5} />
-                  <h4 className="font-serif text-lg font-semibold text-gray-900">{badge.title}</h4>
-                  <p className="mt-2 text-sm text-gray-500">{badge.sub}</p>
+                <div key={idx} className="group flex flex-col items-center text-center rounded-2xl bg-white border border-gray-100 p-8 shadow-sm hover:shadow-[0_20px_50px_rgba(0,0,0,0.06)] hover:-translate-y-1.5 transition-all duration-500 cursor-default">
+                  <div className={`w-16 h-16 rounded-full border flex items-center justify-center mb-5 overflow-hidden transition-all duration-500 group-hover:scale-105 ${badge.bgClass}`}>
+                    <badge.icon size={24} className={`transition-all duration-500 ease-out ${badge.hoverClass}`} strokeWidth={1.5} />
+                  </div>
+                  <h4 className="font-serif text-[17px] font-bold text-gray-900 leading-snug">{badge.title}</h4>
+                  <p className="mt-2.5 text-xs text-gray-500 font-outfit font-light leading-relaxed max-w-[170px]">{badge.sub}</p>
                 </div>
               ))}
             </div>

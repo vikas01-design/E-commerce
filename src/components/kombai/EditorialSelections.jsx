@@ -55,6 +55,7 @@ const ProductCard = ({ product, index }) => {
 
   const handleClick = () => {
     if (product.comingSoon) return;
+    window.scrollTo({ top: 0, behavior: 'instant' });
     navigate(`/shop?category=${encodeURIComponent(product.category)}`);
   };
 
@@ -83,7 +84,7 @@ const ProductCard = ({ product, index }) => {
           src={product.image}
           whileHover={{ scale: 1.08 }}
           transition={{ duration: 1, ease: "circOut" }}
-          className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-1000 relative z-10"
+          className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-[filter,transform] duration-1000 relative z-10 [will-change:filter,transform]"
           alt={product.title}
         />
 
@@ -145,7 +146,7 @@ const EditorialSelections = () => {
 
       {/* Background editorial watermark */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden opacity-5 hidden md:block">
-        <div className="hero-title text-ink-black absolute top-1/4 -left-1/4 scale-150 rotate-[-10deg] whitespace-nowrap">
+        <div className="font-heqra text-ink-black absolute top-1/4 -left-1/4 scale-150 rotate-[-10deg] whitespace-nowrap">
           EDITORIAL EDITORIAL EDITORIAL
         </div>
       </div>
@@ -163,8 +164,8 @@ const EditorialSelections = () => {
                 whileInView={{ y: 0, skewY: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 1.5, ease: [0.22, 1, 0.36, 1] }}
-                className="font-syne font-extrabold uppercase leading-[0.82] tracking-tighter mb-4 md:mb-10"
-                style={{ fontSize: "clamp(2rem, 8vw, 11rem)" }}
+                className="font-heqra leading-[0.85] tracking-tight mb-4 md:mb-10 text-ink-black"
+                style={{ fontSize: "clamp(2.5rem, 8.5vw, 10.5rem)" }}
               >
                 INDIE<br />STYLE<span className="text-rust">.</span>
               </motion.h2>

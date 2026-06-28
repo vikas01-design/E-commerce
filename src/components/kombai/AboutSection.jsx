@@ -1,8 +1,11 @@
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 
 const AboutSection = () => {
+  const navigate = useNavigate();
   return (
     <section
+      id="about-section"
       className="py-12 sm:py-20 md:py-40 text-ink-black relative overflow-hidden"
       style={{ background: "linear-gradient(180deg, #F5F0EB 0%, #EDE5DC 50%, #F5F0EB 100%)" }}
     >
@@ -79,7 +82,11 @@ const AboutSection = () => {
             </motion.p>
 
             <div className="flex flex-col gap-4 md:gap-10 items-start">
-              <motion.button
+               <motion.button
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'instant' });
+                  navigate('/shop');
+                }}
                 whileHover={{ scale: 1.05, backgroundColor: "#111111", color: "#FFFFFF" }}
                 whileTap={{ scale: 0.95 }}
                 className="border-2 md:border-4 border-ink-black font-outfit font-bold uppercase tracking-widest transition-colors duration-500 cursor-pointer"
@@ -89,7 +96,7 @@ const AboutSection = () => {
                   letterSpacing: "0.2em",
                 }}
               >
-                View 2025 Archive
+                View 2026 Archive
               </motion.button>
 
               <div

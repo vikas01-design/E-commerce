@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import { useState } from 'react';
+import { useAuth, useClerk } from '@clerk/react';
 
 export default function CartPage() {
   const { cartItems, cartTotal, cartCount, removeFromCart, updateQuantity } = useCart();
@@ -11,6 +12,8 @@ export default function CartPage() {
   const [coupon, setCoupon] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponError, setCouponError] = useState('');
+  const { isSignedIn } = useAuth();
+  const { openSignIn } = useClerk();
 
   const shipping = cartTotal >= 999 ? 0 : 99;
   const discount = couponApplied ? Math.round(cartTotal * 0.1) : 0;
@@ -202,8 +205,15 @@ export default function CartPage() {
                   </div>
 
                   <button
-                    onClick={() => navigate('/checkout')}
-                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-gray-900 py-4 text-sm font-semibold text-white hover:bg-gray-700 transition-colors"
+                    onClick={() => {
+                      if (!isSignedIn) {
+                        alert("First you have to login");
+                        openSignIn();
+                        return;
+                      }
+                      navigate('/checkout');
+                    }}
+                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-gray-900 py-4 text-sm font-semibold text-white hover:bg-gray-700 transition-colors cursor-pointer"
                   >
                     Checkout <ArrowRight size={16} />
                   </button>
