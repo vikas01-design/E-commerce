@@ -407,6 +407,101 @@ app.post('/api/verify-payment', (req, res) => {
     : res.status(400).json({ error: 'Signature mismatch' });
 });
 
+// ── User authentication middleware for secure customer-facing queries ─────────
+async function requireAuth(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '').trim();
+    if (!token) {
+      return res.status(401).json({ error: 'No authorization token provided' });
+    }
+
+    const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+    req.userClerkId = payload.sub;
+
+    const [users] = await db.execute('SELECT email, role FROM users WHERE clerk_id = ?', [req.userClerkId]);
+    let email = '';
+    let role = '';
+
+    if (users.length > 0) {
+      email = users[0].email;
+      role = users[0].role;
+    } else {
+      try {
+        const clerkUser = await clerk.users.getUser(req.userClerkId);
+        email = clerkUser.emailAddresses?.[0]?.emailAddress || '';
+        role = ADMIN_EMAILS.includes(email) ? 'admin' : 'customer';
+      } catch (clerkErr) {
+        console.error('❌ requireAuth: Failed fetching user from Clerk API:', clerkErr.message);
+      }
+    }
+
+    req.userEmail = email;
+    req.userRole = role;
+    req.isAdmin = ADMIN_EMAILS.includes(email) || role === 'admin';
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired session token' });
+  }
+}
+
+// Get specific order details (Secured: Owner or Admin only)
+app.get('/api/orders/:id', requireAuth, async (req, res) => {
+  try {
+    const orderId = req.params.id;
+
+    const [orders] = await db.execute('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (orders.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = orders[0];
+
+    if (!req.isAdmin && order.clerk_id !== req.userClerkId) {
+      console.warn(`🔒 Access Denied (IDOR Block): User ${req.userEmail || req.userClerkId} tried to view Order #${orderId} belonging to user ${order.clerk_id}`);
+      return res.status(403).json({ error: 'Access denied — you do not have permission to view this order' });
+    }
+
+    const [items] = await db.execute('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
+    
+    res.json({
+      ...order,
+      shipping_address: typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {}),
+      items
+    });
+  } catch (err) {
+    return sendError(res, err, 'Failed to fetch order details');
+  }
+});
+
+// Get payment details for a specific order (Secured: Owner or Admin only)
+app.get('/api/payments/order/:orderId', requireAuth, async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+
+    const [orders] = await db.execute('SELECT clerk_id FROM orders WHERE id = ?', [orderId]);
+    if (orders.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const order = orders[0];
+
+    if (!req.isAdmin && order.clerk_id !== req.userClerkId) {
+      console.warn(`🔒 Access Denied (IDOR Block): User ${req.userEmail || req.userClerkId} tried to view payment details for Order #${orderId} belonging to user ${order.clerk_id}`);
+      return res.status(403).json({ error: 'Access denied — you do not have permission to view this payment' });
+    }
+
+    const [payments] = await db.execute('SELECT * FROM payments WHERE order_id = ?', [orderId]);
+    if (payments.length === 0) {
+      return res.status(404).json({ error: 'No payments found for this order' });
+    }
+
+    res.json(payments[0]);
+  } catch (err) {
+    return sendError(res, err, 'Failed to fetch payment details');
+  }
+});
+
 // ════════════════════════════════════════════════════════════════════════════
 //  ADMIN ROUTES — All protected by requireAdmin middleware
 // ════════════════════════════════════════════════════════════════════════════
