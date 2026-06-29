@@ -2,11 +2,16 @@ import { Search, ShoppingBag, User, LogOut, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useCart } from '../../context/CartContext';
-import { useAuth } from '../../context/AuthContext';
+import { useUser, useClerk } from '@clerk/react';
 
 const CinematicNavbar = () => {
   const { cartCount, setIsCartOpen } = useCart();
-  const { user, openSignIn, signOut } = useAuth();
+  const { isSignedIn, user: clerkUser } = useUser();
+  const { openSignIn, signOut } = useClerk();
+  const user = isSignedIn && clerkUser ? {
+    name: clerkUser.fullName || clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0] || 'User',
+    photoURL: clerkUser.imageUrl || null,
+  } : null;
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);

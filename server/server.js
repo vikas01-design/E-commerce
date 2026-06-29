@@ -1,64 +1,475 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
+
 const express = require('express');
-const Razorpay = require('razorpay');
-const crypto = require('crypto');
-const bodyParser = require('body-parser');
-const cors = require('cors');
+const crypto  = require('crypto');
+const cors    = require('cors');
+const { createClerkClient, verifyToken } = require('@clerk/backend');
+const db = require('./db');
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(bodyParser.json());
-
-// Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET
+// Prevent process crashes on uncaught exceptions or promise rejections
+process.on('uncaughtException', (err) => {
+  console.error('🔥 UNCAUGHT EXCEPTION:', err);
 });
 
-// STEP 1: Create Order
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔥 UNHANDLED REJECTION AT:', promise, 'REASON:', reason);
+});
+
+// ── CORS: allow both the Vite storefront and Next.js admin ──────────────────
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  credentials: true,
+}));
+
+// Raw body for Clerk webhook signature verification
+app.use('/api/clerk-webhook', express.raw({ type: 'application/json' }));
+app.use(express.json());
+
+// ── Admin email whitelist ────────────────────────────────────────────────────
+const ADMIN_EMAILS = ['vikaselle196@gmail.com', 'yashwantreddy231@gmail.com'];
+
+// ── Clerk client ─────────────────────────────────────────────────────────────
+const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+
+// ── Razorpay setup ───────────────────────────────────────────────────────────
+const missingRazorpayConfig = ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET'].filter(k => !process.env[k]);
+if (missingRazorpayConfig.length > 0) {
+  console.warn(`Razorpay env vars missing: ${missingRazorpayConfig.join(', ')}`);
+}
+
+async function createRazorpayOrder(amount) {
+  try {
+    const auth = Buffer.from(`${process.env.RAZORPAY_KEY_ID}:${process.env.RAZORPAY_KEY_SECRET}`).toString('base64');
+    const response = await fetch('https://api.razorpay.com/v1/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${auth}` },
+      body: JSON.stringify({ amount, currency: 'INR', receipt: `receipt_${Date.now()}` }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error?.description || `Razorpay failed ${response.status}`);
+    return data;
+  } catch (error) {
+    if (process.env.RAZORPAY_MOCK_MODE === 'true' || process.env.NODE_ENV !== 'production') {
+      return { id: `mock_order_${Date.now()}`, amount, currency: 'INR', mockMode: true };
+    }
+    throw error;
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MIDDLEWARE — Verify Clerk session + require admin email
+// ════════════════════════════════════════════════════════════════════════════
+async function requireAdmin(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '').trim();
+    if (!token) {
+      console.warn('⚠️ requireAdmin: Missing Authorization token header.');
+      return res.status(401).json({ error: 'No auth token' });
+    }
+
+    // Verify token validity with Clerk
+    const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+    const clerkId = payload.sub;
+
+    // Check DB first to avoid sluggish internet calls to Clerk API
+    const [users] = await db.execute('SELECT email, role FROM users WHERE clerk_id = ?', [clerkId]);
+
+    let email = '';
+    let role = '';
+
+    if (users.length > 0) {
+      email = users[0].email;
+      role = users[0].role;
+    } else {
+      // If user isn't in MySQL yet, fetch profile from Clerk
+      console.log(`ℹ️ Clerk ID ${clerkId} not in local database. Fetching profile from Clerk...`);
+      try {
+        const clerkUser = await clerk.users.getUser(clerkId);
+        email = clerkUser.emailAddresses?.[0]?.emailAddress || '';
+        role = ADMIN_EMAILS.includes(email) ? 'admin' : 'customer';
+
+        // Auto-cache user in local DB
+        await db.execute(
+          `INSERT INTO users (clerk_id, email, name, role) VALUES (?,?,?,?)
+           ON DUPLICATE KEY UPDATE clerk_id=VALUES(clerk_id), role=VALUES(role)`,
+          [clerkId, email, clerkUser.firstName || email.split('@')[0], role]
+        );
+      } catch (clerkErr) {
+        console.error('❌ Failed fetching user details from Clerk API:', clerkErr.message);
+      }
+    }
+
+    if (!ADMIN_EMAILS.includes(email)) {
+      console.warn(`❌ requireAdmin: Access denied for user ${email || clerkId} (role: ${role})`);
+      return res.status(403).json({ error: 'Access denied — admin only' });
+    }
+
+    req.adminEmail  = email;
+    req.adminClerkId = clerkId;
+    next();
+  } catch (err) {
+    console.error('❌ requireAdmin verification failed:', err.message, err.stack);
+    return res.status(401).json({ error: 'Invalid or expired token', detail: err.message });
+  }
+}
+
+// ── Audit log helper ─────────────────────────────────────────────────────────
+async function auditLog(req, action, table, targetId, details = {}) {
+  try {
+    await db.execute(
+      'INSERT INTO audit_log (admin_clerk_id, admin_email, action, target_table, target_id, details) VALUES (?,?,?,?,?,?)',
+      [req.adminClerkId, req.adminEmail, action, table, String(targetId), JSON.stringify(details)]
+    );
+  } catch (_) {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CLERK WEBHOOK — auto-sync new users to MySQL
+// ════════════════════════════════════════════════════════════════════════════
+app.post('/api/clerk-webhook', async (req, res) => {
+  try {
+    const payload = JSON.parse(req.body.toString());
+    const { type, data } = payload;
+
+    if (type === 'user.created' || type === 'user.updated') {
+      const clerkId = data.id;
+      const email   = data.email_addresses?.[0]?.email_address || '';
+      const name    = [data.first_name, data.last_name].filter(Boolean).join(' ') || email.split('@')[0];
+      const role    = ADMIN_EMAILS.includes(email) ? 'admin' : 'customer';
+
+      // ON DUPLICATE KEY UPDATE must map clerk_id to support updating seeded placeholder IDs
+      await db.execute(
+        `INSERT INTO users (clerk_id, email, name, role) VALUES (?,?,?,?)
+         ON DUPLICATE KEY UPDATE clerk_id=VALUES(clerk_id), name=VALUES(name), role=VALUES(role)`,
+        [clerkId, email, name, role]
+      );
+      console.log(`✅ Webhook: Synced user ${email} (clerkId: ${clerkId}, role: ${role})`);
+    }
+
+    if (type === 'session.created') {
+      const clerkId = data.user_id;
+      await db.execute('UPDATE users SET last_login = NOW() WHERE clerk_id = ?', [clerkId]);
+    }
+
+    res.json({ received: true });
+  } catch (err) {
+    console.error('❌ Webhook error:', err);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PUBLIC ROUTES — Storefront
+// ════════════════════════════════════════════════════════════════════════════
+
+// Get all products from database
+app.post('/api/users/sync-login', async (req, res) => {
+  try {
+    const { clerkId, email, name } = req.body;
+    if (!clerkId || !email) {
+      return res.status(400).json({ error: 'Missing clerkId or email' });
+    }
+    const role = ADMIN_EMAILS.includes(email) ? 'admin' : 'customer';
+    
+    // Check if user already exists
+    const [existing] = await db.execute('SELECT id, role FROM users WHERE clerk_id = ? OR email = ?', [clerkId, email]);
+    
+    if (existing.length > 0) {
+      // Update existing record, setting last_login = NOW()
+      await db.execute(
+        'UPDATE users SET clerk_id = ?, email = ?, name = COALESCE(?, name), last_login = NOW() WHERE id = ?',
+        [clerkId, email, name || null, existing[0].id]
+      );
+      console.log(`✅ Real-time login synced: ${email} (clerkId: ${clerkId}, role: ${existing[0].role})`);
+    } else {
+      // Insert new customer record with last_login = NOW()
+      await db.execute(
+        'INSERT INTO users (clerk_id, email, name, role, last_login) VALUES (?,?,?,?, NOW())',
+        [clerkId, email, name || null, role]
+      );
+      console.log(`🌱 Real-time user created & login synced: ${email} (clerkId: ${clerkId}, role: ${role})`);
+    }
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ Sync login error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all products from database
+app.get('/api/products', async (req, res) => {
+  try {
+    const [rows] = await db.execute('SELECT * FROM products ORDER BY id ASC');
+    // Map JSON fields back to arrays
+    const mapped = rows.map(r => ({
+      ...r,
+      sizes: typeof r.sizes === 'string' ? JSON.parse(r.sizes) : (r.sizes || []),
+      colors: typeof r.colors === 'string' ? JSON.parse(r.colors) : (r.colors || []),
+      inStock: Boolean(r.in_stock),
+      originalPrice: r.original_price
+    }));
+    res.json(mapped);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Seed products from client if database is empty
+app.post('/api/products/seed', async (req, res) => {
+  try {
+    const [check] = await db.execute('SELECT COUNT(*) AS count FROM products');
+    if (check[0].count > 0) {
+      return res.json({ success: true, message: 'Database already has products' });
+    }
+
+    const { products: clientProducts } = req.body;
+    if (!clientProducts || !Array.isArray(clientProducts)) {
+      return res.status(400).json({ error: 'Invalid payload' });
+    }
+
+    console.log(`🌱 Seeding ${clientProducts.length} products from client into MySQL...`);
+    for (const p of clientProducts) {
+      await db.execute(
+        `INSERT INTO products (id, name, category, price, original_price, image, badge, in_stock, rating, reviews, description, sizes, colors)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          p.id,
+          p.name,
+          p.category,
+          p.price,
+          p.originalPrice || null,
+          p.image,
+          p.badge || null,
+          p.inStock !== false,
+          p.rating || 0,
+          p.reviews || 0,
+          p.description || 'Premium quality apparel from Sai Deepthi.',
+          JSON.stringify(p.sizes || ["XS", "S", "M", "L", "XL", "XXL"]),
+          JSON.stringify(p.colors || ["Black"])
+        ]
+      );
+    }
+    res.json({ success: true, seededCount: clientProducts.length });
+  } catch (err) {
+    console.error('❌ Seeding error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Save order from storefront checkout
+app.post('/api/orders', async (req, res) => {
+  try {
+    const { clerkId, customerEmail, customerName, items, totalAmount, shippingAmount, shippingAddress, paymentMethod, razorpayOrderId, razorpayPaymentId } = req.body;
+
+    const [orderResult] = await db.execute(
+      `INSERT INTO orders (clerk_id, customer_email, customer_name, total_amount, shipping_amount, status, shipping_address)
+       VALUES (?,?,?,?,?,?,?)`,
+      [clerkId || null, customerEmail, customerName, totalAmount, shippingAmount || 0, 'confirmed', JSON.stringify(shippingAddress || {})]
+    );
+    const orderId = orderResult.insertId;
+
+    // Insert order items
+    if (items && items.length > 0) {
+      for (const item of items) {
+        await db.execute(
+          'INSERT INTO order_items (order_id, product_name, quantity, unit_price) VALUES (?,?,?,?)',
+          [orderId, item.name, item.quantity, item.price || item.salePrice || 0]
+        );
+      }
+    }
+
+    // Insert payment record
+    await db.execute(
+      `INSERT INTO payments (order_id, razorpay_order_id, razorpay_payment_id, amount, status, method)
+       VALUES (?,?,?,?,?,?)`,
+      [orderId, razorpayOrderId || null, razorpayPaymentId || null, totalAmount, 'success', paymentMethod || 'unknown']
+    );
+
+    res.json({ success: true, orderId });
+  } catch (err) {
+    console.error('Save order error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Razorpay — Create Order
 app.post('/api/create-order', async (req, res) => {
   try {
     const { amount } = req.body;
-    
-    // Validate amount >= 100 paise (₹1)
-    if (!amount || amount < 100) {
-      return res.status(400).json({ error: "Amount must be >= 100 paise" });
-    }
-
-    const options = {
-      amount: amount,
-      currency: "INR",
-      receipt: "receipt_" + Date.now()
-    };
-    
-    const order = await razorpay.orders.create(options);
-    res.json({ order_id: order.id, amount: order.amount, currency: order.currency });
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET)
+      return res.status(500).json({ error: 'Razorpay credentials not configured.' });
+    if (!amount || amount < 100)
+      return res.status(400).json({ error: 'Amount must be >= 100 paise' });
+    const order = await createRazorpayOrder(amount);
+    res.json({ order_id: order.id, amount: order.amount, currency: order.currency, mockMode: Boolean(order.mockMode) });
   } catch (err) {
-    console.error("Razorpay Create Order Error:", err);
-    res.status(500).json({ error: err.message || "Failed to create order" });
+    res.status(500).json({ error: err.message });
   }
 });
 
-// STEP 3: Verify Payment Signature
+// Razorpay — Verify Payment
 app.post('/api/verify-payment', (req, res) => {
   const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
-  
-  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-    return res.status(400).json({ error: "Missing fields" });
-  }
-
-  const generated_signature = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-    .update(razorpay_order_id + "|" + razorpay_payment_id)
-    .digest('hex');
-
-  if (generated_signature === razorpay_signature) {
-    return res.json({ success: true });
-  } else {
-    return res.status(400).json({ error: "Signature mismatch" });
-  }
+  if (razorpay_order_id?.startsWith('mock_order_')) return res.json({ success: true, mockMode: true });
+  if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature)
+    return res.status(400).json({ error: 'Missing fields' });
+  const generated = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+    .update(razorpay_order_id + '|' + razorpay_payment_id).digest('hex');
+  return generated === razorpay_signature
+    ? res.json({ success: true })
+    : res.status(400).json({ error: 'Signature mismatch' });
 });
 
+// ════════════════════════════════════════════════════════════════════════════
+//  ADMIN ROUTES — All protected by requireAdmin middleware
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Stats overview ───────────────────────────────────────────────────────────
+app.get('/api/admin/stats', requireAdmin, async (req, res) => {
+  try {
+    const [[{ userCount }]]    = await db.execute('SELECT COUNT(*) AS userCount FROM users');
+    const [[{ orderCount }]]   = await db.execute('SELECT COUNT(*) AS orderCount FROM orders');
+    const [[{ revenue }]]      = await db.execute('SELECT COALESCE(SUM(amount),0) AS revenue FROM payments WHERE status="success"');
+    const [[{ productCount }]] = await db.execute('SELECT COUNT(*) AS productCount FROM products');
+    
+    const [dailyRevenue] = await db.execute(
+      `SELECT DATE(created_at) AS date, SUM(amount) AS total
+       FROM payments WHERE status='success' AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+       GROUP BY DATE(created_at) ORDER BY date ASC`
+    );
+    const [recentLogins] = await db.execute(
+      `SELECT name, email, last_login
+       FROM users
+       WHERE last_login IS NOT NULL
+       ORDER BY last_login DESC
+       LIMIT 10`
+    );
+
+    res.json({ userCount, orderCount, revenue, productCount, dailyRevenue, recentLogins });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Users ────────────────────────────────────────────────────────────────────
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  const [rows] = await db.execute('SELECT * FROM users ORDER BY created_at DESC');
+  res.json(rows);
+});
+
+app.patch('/api/admin/users/:id/role', requireAdmin, async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (!['admin','customer','tester'].includes(role))
+      return res.status(400).json({ error: 'Invalid role' });
+    await db.execute('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
+    await auditLog(req, 'UPDATE_ROLE', 'users', req.params.id, { newRole: role });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Products ─────────────────────────────────────────────────────────────────
+app.get('/api/admin/products', requireAdmin, async (req, res) => {
+  const [rows] = await db.execute('SELECT * FROM products ORDER BY created_at DESC');
+  res.json(rows);
+});
+
+app.post('/api/admin/products', requireAdmin, async (req, res) => {
+  try {
+    const { name, category, price, original_price, image, badge, in_stock, description, sizes, colors } = req.body;
+    const [result] = await db.execute(
+      `INSERT INTO products (name, category, price, original_price, image, badge, in_stock, description, sizes, colors)
+       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      [
+        name,
+        category,
+        price,
+        original_price || null,
+        image,
+        badge || null,
+        in_stock !== false,
+        description || 'Premium quality apparel from Sai Deepthi.',
+        JSON.stringify(sizes || ["XS", "S", "M", "L", "XL", "XXL"]),
+        JSON.stringify(colors || ["Black"])
+      ]
+    );
+    await auditLog(req, 'CREATE_PRODUCT', 'products', result.insertId, { name });
+    res.json({ success: true, id: result.insertId });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name, category, price, original_price, image, badge, in_stock, description, sizes, colors } = req.body;
+    await db.execute(
+      `UPDATE products
+       SET name=?, category=?, price=?, original_price=?, image=?, badge=?, in_stock=?, description=?, sizes=?, colors=?
+       WHERE id=?`,
+      [
+        name,
+        category,
+        price,
+        original_price || null,
+        image,
+        badge || null,
+        in_stock !== false,
+        description || 'Premium quality apparel from Sai Deepthi.',
+        JSON.stringify(sizes || ["XS", "S", "M", "L", "XL", "XXL"]),
+        JSON.stringify(colors || ["Black"]),
+        req.params.id
+      ]
+    );
+    await auditLog(req, 'UPDATE_PRODUCT', 'products', req.params.id, { name });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
+  try {
+    await db.execute('DELETE FROM products WHERE id=?', [req.params.id]);
+    await auditLog(req, 'DELETE_PRODUCT', 'products', req.params.id, {});
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Orders ───────────────────────────────────────────────────────────────────
+app.get('/api/admin/orders', requireAdmin, async (req, res) => {
+  const [rows] = await db.execute(
+    `SELECT o.*, GROUP_CONCAT(CONCAT(oi.quantity,'x ',oi.product_name) SEPARATOR ', ') AS items_summary
+     FROM orders o LEFT JOIN order_items oi ON oi.order_id=o.id
+     GROUP BY o.id ORDER BY o.created_at DESC`
+  );
+  res.json(rows);
+});
+
+app.patch('/api/admin/orders/:id/status', requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.body;
+    await db.execute('UPDATE orders SET status=? WHERE id=?', [status, req.params.id]);
+    await auditLog(req, 'UPDATE_ORDER_STATUS', 'orders', req.params.id, { status });
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Payments ─────────────────────────────────────────────────────────────────
+app.get('/api/admin/payments', requireAdmin, async (req, res) => {
+  const [rows] = await db.execute(
+    `SELECT p.*, o.customer_email, o.customer_name
+     FROM payments p LEFT JOIN orders o ON o.id=p.order_id
+     ORDER BY p.created_at DESC`
+  );
+  res.json(rows);
+});
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+app.get('/api/admin/audit', requireAdmin, async (req, res) => {
+  const [rows] = await db.execute('SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 100');
+  res.json(rows);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Razorpay Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
