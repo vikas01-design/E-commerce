@@ -30,6 +30,16 @@ function sanitizeInput(val) {
     .replace(/\//g, '&#x2F;');
 }
 
+// Production-safe error responder to prevent leakage of internal/db errors
+function sendError(res, err, friendlyMessage = 'An internal server error occurred.', statusCode = 500) {
+  console.error('❌ Server Error Details:', err);
+  const isProd = process.env.NODE_ENV === 'production';
+  return res.status(statusCode).json({
+    error: friendlyMessage,
+    ...(isProd ? {} : { details: err.message })
+  });
+}
+
 // ── CORS: allow both the Vite storefront and Next.js admin ──────────────────
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:3000'],
@@ -169,8 +179,7 @@ async function requireAdmin(req, res, next) {
     req.adminClerkId = clerkId;
     next();
   } catch (err) {
-    console.error('❌ requireAdmin verification failed:', err.message, err.stack);
-    return res.status(401).json({ error: 'Invalid or expired token', detail: err.message });
+    return sendError(res, err, 'Invalid or expired token', 401);
   }
 }
 
@@ -214,8 +223,7 @@ app.post('/api/clerk-webhook', async (req, res) => {
 
     res.json({ received: true });
   } catch (err) {
-    console.error('❌ Webhook error:', err);
-    res.status(400).json({ error: err.message });
+    return sendError(res, err, 'Webhook payload processing failed', 400);
   }
 });
 
@@ -262,8 +270,7 @@ app.post('/api/users/sync-login', async (req, res) => {
     
     res.json({ success: true });
   } catch (err) {
-    console.error('❌ Sync login error:', err);
-    res.status(500).json({ error: err.message });
+    return sendError(res, err, 'Failed to sync user login session');
   }
 });
 
@@ -281,7 +288,7 @@ app.get('/api/products', async (req, res) => {
     }));
     res.json(mapped);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendError(res, err, 'Failed to fetch products');
   }
 });
 
@@ -322,8 +329,7 @@ app.post('/api/products/seed', async (req, res) => {
     }
     res.json({ success: true, seededCount: clientProducts.length });
   } catch (err) {
-    console.error('❌ Seeding error:', err);
-    res.status(500).json({ error: err.message });
+    return sendError(res, err, 'Product database seeding failed');
   }
 });
 
@@ -369,8 +375,7 @@ app.post('/api/orders', async (req, res) => {
 
     res.json({ success: true, orderId });
   } catch (err) {
-    console.error('Save order error:', err);
-    res.status(500).json({ error: err.message });
+    return sendError(res, err, 'Failed to save checkout order');
   }
 });
 
@@ -385,7 +390,7 @@ app.post('/api/create-order', async (req, res) => {
     const order = await createRazorpayOrder(amount);
     res.json({ order_id: order.id, amount: order.amount, currency: order.currency, mockMode: Boolean(order.mockMode) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return sendError(res, err, 'Razorpay order creation failed');
   }
 });
 
@@ -427,7 +432,7 @@ app.get('/api/admin/stats', requireAdmin, async (req, res) => {
     );
 
     res.json({ userCount, orderCount, revenue, productCount, dailyRevenue, recentLogins });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { return sendError(res, err, 'Failed to fetch admin stats'); }
 });
 
 // ── Users ────────────────────────────────────────────────────────────────────
@@ -444,7 +449,7 @@ app.patch('/api/admin/users/:id/role', requireAdmin, async (req, res) => {
     await db.execute('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
     await auditLog(req, 'UPDATE_ROLE', 'users', req.params.id, { newRole: role });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { return sendError(res, err, 'Failed to update user role'); }
 });
 
 // ── Products ─────────────────────────────────────────────────────────────────
@@ -479,7 +484,7 @@ app.post('/api/admin/products', requireAdmin, async (req, res) => {
     );
     await auditLog(req, 'CREATE_PRODUCT', 'products', result.insertId, { name });
     res.json({ success: true, id: result.insertId });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { return sendError(res, err, 'Failed to create new product'); }
 });
 
 app.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
@@ -510,7 +515,7 @@ app.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
     );
     await auditLog(req, 'UPDATE_PRODUCT', 'products', req.params.id, { name });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { return sendError(res, err, 'Failed to update product details'); }
 });
 
 app.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
@@ -518,7 +523,7 @@ app.delete('/api/admin/products/:id', requireAdmin, async (req, res) => {
     await db.execute('DELETE FROM products WHERE id=?', [req.params.id]);
     await auditLog(req, 'DELETE_PRODUCT', 'products', req.params.id, {});
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { return sendError(res, err, 'Failed to delete product'); }
 });
 
 // ── Orders ───────────────────────────────────────────────────────────────────
@@ -537,7 +542,7 @@ app.patch('/api/admin/orders/:id/status', requireAdmin, async (req, res) => {
     await db.execute('UPDATE orders SET status=? WHERE id=?', [status, req.params.id]);
     await auditLog(req, 'UPDATE_ORDER_STATUS', 'orders', req.params.id, { status });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) { return sendError(res, err, 'Failed to update order status'); }
 });
 
 // ── Payments ─────────────────────────────────────────────────────────────────
