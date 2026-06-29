@@ -18,6 +18,18 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('🔥 UNHANDLED REJECTION AT:', promise, 'REASON:', reason);
 });
 
+// HTML Input Sanitization helper to prevent Cross-Site Scripting (XSS)
+function sanitizeInput(val) {
+  if (typeof val !== 'string') return val;
+  return val
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;');
+}
+
 // ── CORS: allow both the Vite storefront and Next.js admin ──────────────────
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:3000'],
@@ -203,10 +215,12 @@ app.post('/api/clerk-webhook', async (req, res) => {
 // Get all products from database
 app.post('/api/users/sync-login', async (req, res) => {
   try {
-    const { clerkId, email, name } = req.body;
-    if (!clerkId || !email) {
+    const { clerkId, email: rawEmail, name: rawName } = req.body;
+    if (!clerkId || !rawEmail) {
       return res.status(400).json({ error: 'Missing clerkId or email' });
     }
+    const email = sanitizeInput(rawEmail);
+    const name = sanitizeInput(rawName);
     const role = ADMIN_EMAILS.includes(email) ? 'admin' : 'customer';
     
     // Check if user already exists
@@ -305,12 +319,23 @@ app.post('/api/products/seed', async (req, res) => {
 // Save order from storefront checkout
 app.post('/api/orders', async (req, res) => {
   try {
-    const { clerkId, customerEmail, customerName, items, totalAmount, shippingAmount, shippingAddress, paymentMethod, razorpayOrderId, razorpayPaymentId } = req.body;
+    const { clerkId, customerEmail: rawEmail, customerName: rawName, items, totalAmount, shippingAmount, shippingAddress, paymentMethod, razorpayOrderId, razorpayPaymentId } = req.body;
+
+    const customerEmail = sanitizeInput(rawEmail);
+    const customerName = sanitizeInput(rawName);
+
+    // Sanitize shipping address string values
+    const cleanAddress = {};
+    if (shippingAddress && typeof shippingAddress === 'object') {
+      Object.keys(shippingAddress).forEach(key => {
+        cleanAddress[key] = sanitizeInput(shippingAddress[key]);
+      });
+    }
 
     const [orderResult] = await db.execute(
       `INSERT INTO orders (clerk_id, customer_email, customer_name, total_amount, shipping_amount, status, shipping_address)
        VALUES (?,?,?,?,?,?,?)`,
-      [clerkId || null, customerEmail, customerName, totalAmount, shippingAmount || 0, 'confirmed', JSON.stringify(shippingAddress || {})]
+      [clerkId || null, customerEmail, customerName, totalAmount, shippingAmount || 0, 'confirmed', JSON.stringify(cleanAddress)]
     );
     const orderId = orderResult.insertId;
 
@@ -319,7 +344,7 @@ app.post('/api/orders', async (req, res) => {
       for (const item of items) {
         await db.execute(
           'INSERT INTO order_items (order_id, product_name, quantity, unit_price) VALUES (?,?,?,?)',
-          [orderId, item.name, item.quantity, item.price || item.salePrice || 0]
+          [orderId, sanitizeInput(item.name), item.quantity, item.price || item.salePrice || 0]
         );
       }
     }
@@ -419,7 +444,12 @@ app.get('/api/admin/products', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/products', requireAdmin, async (req, res) => {
   try {
-    const { name, category, price, original_price, image, badge, in_stock, description, sizes, colors } = req.body;
+    const { name: rawName, category: rawCategory, price, original_price, image, badge: rawBadge, in_stock, description: rawDescription, sizes, colors } = req.body;
+    const name = sanitizeInput(rawName);
+    const category = sanitizeInput(rawCategory);
+    const badge = sanitizeInput(rawBadge);
+    const description = sanitizeInput(rawDescription);
+
     const [result] = await db.execute(
       `INSERT INTO products (name, category, price, original_price, image, badge, in_stock, description, sizes, colors)
        VALUES (?,?,?,?,?,?,?,?,?,?)`,
@@ -443,7 +473,12 @@ app.post('/api/admin/products', requireAdmin, async (req, res) => {
 
 app.put('/api/admin/products/:id', requireAdmin, async (req, res) => {
   try {
-    const { name, category, price, original_price, image, badge, in_stock, description, sizes, colors } = req.body;
+    const { name: rawName, category: rawCategory, price, original_price, image, badge: rawBadge, in_stock, description: rawDescription, sizes, colors } = req.body;
+    const name = sanitizeInput(rawName);
+    const category = sanitizeInput(rawCategory);
+    const badge = sanitizeInput(rawBadge);
+    const description = sanitizeInput(rawDescription);
+
     await db.execute(
       `UPDATE products
        SET name=?, category=?, price=?, original_price=?, image=?, badge=?, in_stock=?, description=?, sizes=?, colors=?
