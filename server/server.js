@@ -74,7 +74,8 @@ if (process.env.NODE_ENV === 'production') {
 
 // Raw body for Clerk webhook signature verification
 app.use('/api/clerk-webhook', express.raw({ type: 'application/json' }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // ── Admin email whitelist ────────────────────────────────────────────────────
 const ADMIN_EMAILS = ['vikaselle196@gmail.com', 'yashwantreddy231@gmail.com'];
