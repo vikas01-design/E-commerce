@@ -388,7 +388,7 @@ export default function AboutPage() {
               style={{ minHeight: "460px" }}>
               <iframe
                 title="Sai Deepthi Dresses Location"
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d951.1!2d79.3766981!3d18.6086597!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcd2d293885267f%3A0x964fbd67b4f7c2fa!2sSai%20deepthi%20dresses%20%2Csarees%26kids%20wear%20mens%20wear!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin"
+                src="https://maps.google.com/maps?q=18.6086597,79.3766981+(Sai%20Deepthi%20Dresses%20%2Csarees%20%26%20Kids%20Wear%20Mens%20Wear)&t=&z=17&ie=UTF8&iwloc=&output=embed"
                 width="100%" height="100%"
                 style={{ border: 0, minHeight: "460px", display: "block" }}
                 allowFullScreen="" loading="lazy"
